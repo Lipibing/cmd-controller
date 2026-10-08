@@ -8,7 +8,7 @@ main_script = "win_service_manager.py"  # <--- 请修改为你的主程序文件
 # 图标文件名
 icon_file = "window.ico"
 # 版本号
-app_version = "v2.7"
+app_version = "v2.8"
 output_name = "服务进程管理工作台"
 
 def build():

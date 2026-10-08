@@ -6,6 +6,7 @@ Windows 服务进程管理工作台 (Lark-like UI)
 
 from __future__ import annotations
 import hashlib
+import queue
 import getpass
 import tempfile
 import os
@@ -22,6 +23,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Callable, Dict, List, Optional
+from workbench_update import latest_release, download_release, launch_replacement
 
 from workbench_core import (
     BoundedLogQueue,
@@ -79,7 +81,7 @@ COLOR_WARNING_BG = "#FFF7ED"
 COLOR_ERROR_BG = "#FEF2F2"
 
 FONT_FAMILY = "Microsoft YaHei UI"
-APP_VERSION = "v2.7"
+APP_VERSION = "v2.8"
 CREATE_NO_WINDOW = 0x08000000
 IS_FROZEN = getattr(sys, "frozen", False)
 APP_SCRIPT_PATH = Path(sys.executable).resolve() if IS_FROZEN else Path(__file__).resolve()
@@ -1318,7 +1320,7 @@ class App:
     def show_settings(self):
         win = tk.Toplevel(self.root);
         win.title("系统设置");
-        win.geometry("480x430");
+        win.geometry("480x490");
         win.configure(bg="#FFFFFF");
         win.transient(self.root)
         tk.Label(win, text="基本设置", font=(FONT_FAMILY, 12, "bold"), bg="#FFFFFF").pack(pady=(20, 15))
@@ -1383,6 +1385,83 @@ class App:
             except Exception as exc:
                 messagebox.showerror('自启检查失败', str(exc), parent=win)
         make_button(win, '检查开机启动', check_autostart, px=12, py=6).pack(pady=12)
+        make_button(win, '检查更新', self.check_update, primary=True, px=12, py=6).pack(pady=6)
+
+    def check_update(self):
+        if getattr(self, '_update_busy', False):
+            return
+        if not getattr(sys, 'frozen', False):
+            messagebox.showinfo('检查更新', '在线升级仅支持发布版 EXE，源码运行请更新源码。', parent=self.root)
+            return
+        self._update_busy = True
+        progress = tk.Toplevel(self.root)
+        progress.title('工作台更新')
+        progress.geometry('420x150')
+        progress.transient(self.root)
+        progress.grab_set()
+        progress.protocol('WM_DELETE_WINDOW', lambda: None)
+        label = tk.Label(progress, text='正在检查 GitHub 最新版本…', padx=20, pady=30)
+        label.pack(fill='both', expand=True)
+        results = queue.Queue()
+
+        def worker(operation):
+            try:
+                results.put(('ok', operation()))
+            except Exception as exc:
+                results.put(('error', str(exc)))
+
+        def finish():
+            self._update_busy = False
+            progress.grab_release()
+            progress.destroy()
+
+        def poll(stage):
+            if self._closing:
+                return
+            try:
+                status, value = results.get_nowait()
+            except queue.Empty:
+                self.root.after(100, lambda: poll(stage))
+                return
+            if status == 'error':
+                finish()
+                messagebox.showerror('更新失败', f'当前版本未替换。请检查网络或发布文件。\n\n{value}', parent=self.root)
+                return
+            if stage == 'check':
+                if value is None:
+                    finish()
+                    messagebox.showinfo('检查更新', f'当前 {APP_VERSION} 已是最新版本。', parent=self.root)
+                    return
+                if any(tab.process.running for tab in self.tabs):
+                    finish()
+                    messagebox.showinfo('发现新版本', f'发现 {value["version"]}。请先停止全部托管服务，再执行升级。', parent=self.root)
+                    return
+                if not messagebox.askyesno('确认升级',
+                        f'当前 {APP_VERSION} → {value["version"]}\n\n{value["notes"]}\n\n'
+                        '升级将关闭并重启工作台，保留配置和日志。新版会按原设置启动自启服务。继续吗？',
+                        parent=progress, default='no'):
+                    finish()
+                    return
+                label.config(text='正在下载并校验新版，请稍候…')
+                threading.Thread(target=worker, args=(lambda: download_release(value, resolve_data_dir() / 'updates'),), daemon=True).start()
+                self.root.after(100, lambda: poll('download'))
+                return
+            try:
+                if any(tab.process.running for tab in self.tabs):
+                    raise RuntimeError('下载期间服务已启动，请先停止服务再升级。')
+                self.config_store.save(self._collect_config())
+                launch_replacement(sys.executable, value, os.getpid(), _service_environment())
+            except Exception as exc:
+                finish()
+                messagebox.showerror('无法升级', str(exc), parent=self.root)
+                return
+            self._closing = True
+            self.dispose(stop_process=False)
+            finish()
+            self.root.destroy()
+
+        threading.Thread(target=worker, args=(lambda: latest_release(APP_VERSION),), daemon=True).start()
+        self.root.after(100, lambda: poll('check'))
 
     def _set_status(self, text: str, warning: bool = False, error: bool = False):
         if not hasattr(self, "status_label") or not self.status_label.winfo_exists():
