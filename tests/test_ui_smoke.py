@@ -182,6 +182,31 @@ class AppUiSmokeTests(unittest.TestCase):
         self.assertEqual(self.app._startup_after_ids, before)
         schedule.assert_not_called()
 
+    def test_routine_buttons_execute_without_confirmation(self):
+        for text in ('浏览', '搜索', '导出日志', '内存模板', '新增服务',
+                     '系统设置', '检查开机启动', '检查更新'):
+            with self.subTest(button=text):
+                calls = []
+                button = wsm.make_button(self.root, text, lambda: calls.append(True))
+                try:
+                    with patch.object(wsm.messagebox, 'askyesno', return_value=False) as confirm:
+                        button.invoke()
+                    confirm.assert_not_called()
+                    self.assertEqual(calls, [True])
+                finally:
+                    button.destroy()
+
+    def test_important_button_keeps_its_own_single_confirmation(self):
+        button = wsm.make_button(self.root, '停止全部', self.app.stop_all)
+        try:
+            with patch.object(wsm.messagebox, 'askyesno', return_value=False) as confirm, \
+                    patch.object(self.app.tabs[0].process, 'stop') as stop:
+                button.invoke()
+            confirm.assert_called_once()
+            stop.assert_not_called()
+        finally:
+            button.destroy()
+
     def test_cancel_stop_all_does_not_stop_services(self):
         with patch.object(wsm.messagebox, 'askyesno', return_value=False), \
                 patch.object(self.app.tabs[0].process, 'stop') as stop:

@@ -81,7 +81,7 @@ COLOR_WARNING_BG = "#FFF7ED"
 COLOR_ERROR_BG = "#FEF2F2"
 
 FONT_FAMILY = "Microsoft YaHei UI"
-APP_VERSION = "v2.8"
+APP_VERSION = "v2.9"
 CREATE_NO_WINDOW = 0x08000000
 IS_FROZEN = getattr(sys, "frozen", False)
 APP_SCRIPT_PATH = Path(sys.executable).resolve() if IS_FROZEN else Path(__file__).resolve()
@@ -155,13 +155,6 @@ def apply_hover(widget: tk.Widget, normal_bg: str, hover_bg: str):
 
 def make_button(parent: tk.Widget, text: str, command: Callable, *, primary=False, danger=False, ghost=False,
                 px=20, py=8, font_size=9):
-    already_confirmed = {'request_start', 'stop', 'restart', 'clear_logs', 'start_all',
-                         'stop_all', 'restart_autostart', 'save_and_exit'}
-    original_command = command
-    if getattr(command, '__name__', '') not in already_confirmed:
-        def command():
-            if messagebox.askyesno('操作确认', f'确定执行“{text}”吗？', parent=parent, default='no'):
-                original_command()
     bg = COLOR_PRIMARY if primary else ("#FDECEC" if danger else (COLOR_SIDEBAR_BG if ghost else COLOR_BTN_SECONDARY))
     fg = "#FFFFFF" if primary else (COLOR_DANGER if danger else COLOR_TEXT_BODY)
     hover = COLOR_PRIMARY_HOVER if primary else ("#FAD5D2" if danger else ("#F2F3F5" if ghost else COLOR_BTN_SECONDARY_HOVER))
