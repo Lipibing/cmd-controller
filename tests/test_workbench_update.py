@@ -53,6 +53,24 @@ class UpdateTests(unittest.TestCase):
     def test_powershell_quote(self):
         self.assertEqual(update.ps_quote("C:/a'b.exe"), "'C:/a''b.exe'")
 
+    def test_timeout_retries_and_explains_connectivity(self):
+        from urllib.error import URLError
+        with patch.object(update, 'urlopen', side_effect=URLError(TimeoutError('timed out'))) as opener, \
+                patch.object(update.time, 'sleep'):
+            with self.assertRaisesRegex(RuntimeError, '网络'):
+                update.read_url('https://api.github.com/test', 100)
+        self.assertEqual(opener.call_count, 3)
+
+    def test_invalid_proxy_is_rejected(self):
+        with self.assertRaises(ValueError):
+            update.read_url('https://api.github.com/test', 100, proxy='file:///tmp/a')
+
+    def test_direct_mode_does_not_use_system_proxy(self):
+        with patch.object(update, 'ProxyHandler') as handler, patch.object(update, 'build_opener') as opener:
+            update.open_request('https://api.github.com/test', 'direct')
+        handler.assert_called_once_with({})
+        opener.return_value.open.assert_called_once()
+
     def test_helper_waits_backs_up_and_uses_isolated_environment(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'new.exe'

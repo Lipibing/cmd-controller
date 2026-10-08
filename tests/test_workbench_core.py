@@ -16,6 +16,13 @@ from workbench_core import (
 
 
 class ConfigStoreTests(unittest.TestCase):
+    def test_update_proxy_persists_and_legacy_defaults_to_system(self):
+        self.assertEqual(normalize_config_data({})['update_proxy'], '')
+        with tempfile.TemporaryDirectory() as directory:
+            store = ConfigStore(Path(directory))
+            store.save({'update_proxy': 'http://192.0.2.1:8080'})
+            self.assertEqual(store.load().data['update_proxy'], 'http://192.0.2.1:8080')
+
     def test_resolve_data_dir_uses_local_appdata_independent_of_exe(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch.dict(os.environ, {"LOCALAPPDATA": temp_dir}):

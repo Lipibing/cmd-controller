@@ -18,6 +18,8 @@ import sys
 import threading
 import time
 import tkinter as tk
+import tkinter.font as tkfont
+import customtkinter as ctk
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -55,25 +57,25 @@ except ImportError:
         return cmd, Path(cfg.jar_path).parent
 
 # --- 颜色与样式配置 ---
-COLOR_APP_BG = "#F6F7F9"
-COLOR_SIDEBAR_BG = "#FBFCFE"
+COLOR_APP_BG = "#FFFFFF"
+COLOR_SIDEBAR_BG = "#F7F7F8"
 COLOR_CARD_BG = "#FFFFFF"
-COLOR_PRIMARY = "#1456F0"
-COLOR_PRIMARY_HOVER = "#0F46CC"
-COLOR_TEXT_TITLE = "#1D2129"
-COLOR_TEXT_BODY = "#4E5969"
-COLOR_TEXT_MUTED = "#86909C"
-COLOR_BORDER = "#E5E6EB"
+COLOR_PRIMARY = "#242529"
+COLOR_PRIMARY_HOVER = "#3B3C40"
+COLOR_TEXT_TITLE = "#242529"
+COLOR_TEXT_BODY = "#52535A"
+COLOR_TEXT_MUTED = "#73747C"
+COLOR_BORDER = "#E7E7EB"
 COLOR_INPUT_BG = "#FFFFFF"
-COLOR_BTN_SECONDARY = "#F2F3F5"
-COLOR_BTN_SECONDARY_HOVER = "#E5E6EB"
+COLOR_BTN_SECONDARY = "#F1F1F3"
+COLOR_BTN_SECONDARY_HOVER = "#E7E7EB"
 COLOR_SUCCESS = "#2BA471"  # 运行绿
 COLOR_SUCCESS_BG = "#E8F7F0"
 COLOR_STOP = "#98A2B3"  # 停止灰
 COLOR_STOP_BG = "#F2F4F7"
-COLOR_DANGER = "#F04438"  # 停止红
-COLOR_LOG_BG = "#0E1117"
-COLOR_LOG_TEXT = "#D8DEE9"
+COLOR_DANGER = "#B42332"  # 停止红
+COLOR_LOG_BG = "#17181C"
+COLOR_LOG_TEXT = "#E0E0E5"
 COLOR_SEARCH_HIGHLIGHT = "#FF9D00"
 COLOR_SEARCH_CURRENT = "#3370FF"
 COLOR_WARNING = "#B45309"
@@ -81,7 +83,7 @@ COLOR_WARNING_BG = "#FFF7ED"
 COLOR_ERROR_BG = "#FEF2F2"
 
 FONT_FAMILY = "Microsoft YaHei UI"
-APP_VERSION = "v2.9"
+APP_VERSION = "v2.10"
 CREATE_NO_WINDOW = 0x08000000
 IS_FROZEN = getattr(sys, "frozen", False)
 APP_SCRIPT_PATH = Path(sys.executable).resolve() if IS_FROZEN else Path(__file__).resolve()
@@ -153,24 +155,49 @@ def apply_hover(widget: tk.Widget, normal_bg: str, hover_bg: str):
                 lambda _: widget.configure(bg=normal_bg) if str(widget.cget("state")) != "disabled" else None)
 
 
+class WorkbenchButton(ctk.CTkButton):
+    def config(self, **kwargs):
+        if 'bg' in kwargs:
+            kwargs['fg_color'] = kwargs.pop('bg')
+        changed = {key: value for key, value in kwargs.items() if self.cget(key) != value}
+        if changed:
+            self.configure(**changed)
+
+
+class WorkbenchEntry(ctk.CTkEntry):
+    config = ctk.CTkEntry.configure
+
+
+ctk.set_appearance_mode('light')
+ctk.set_widget_scaling(1.0)
+
+
 def make_button(parent: tk.Widget, text: str, command: Callable, *, primary=False, danger=False, ghost=False,
                 px=20, py=8, font_size=9):
     bg = COLOR_PRIMARY if primary else ("#FDECEC" if danger else (COLOR_SIDEBAR_BG if ghost else COLOR_BTN_SECONDARY))
     fg = "#FFFFFF" if primary else (COLOR_DANGER if danger else COLOR_TEXT_BODY)
     hover = COLOR_PRIMARY_HOVER if primary else ("#FAD5D2" if danger else ("#F2F3F5" if ghost else COLOR_BTN_SECONDARY_HOVER))
-    btn = tk.Button(parent, text=text, command=command, bg=bg, fg=fg, activebackground=hover, activeforeground=fg,
-                    disabledforeground="#B0B7C3", relief="flat", bd=0, takefocus=True,
-                    highlightthickness=1, highlightbackground=bg, highlightcolor=COLOR_PRIMARY,
-                    font=(FONT_FAMILY, font_size, "bold" if primary else "normal"),
-                    padx=px, pady=py, cursor="hand2")
-    apply_hover(btn, bg, hover)
+    font = tkfont.Font(family=FONT_FAMILY, size=font_size, weight='bold' if primary else 'normal')
+    btn = WorkbenchButton(parent, text=text, command=command,
+                    width=font.measure(text) + px * 2, height=max(30, font.metrics('linespace') + py * 2),
+                    fg_color=bg, text_color=fg, hover_color=hover,
+                    text_color_disabled='#A0A0A8', corner_radius=8,
+                    font=(FONT_FAMILY, round(font_size * 4 / 3), 'bold' if primary else 'normal'))
+    btn.bind('<Button-1>', lambda _: btn.focus_set(), add='+')
+    btn.bind('<Return>', lambda _: btn.invoke(), add='+')
+    btn.bind('<space>', lambda _: btn.invoke(), add='+')
+    btn.bind('<FocusIn>', lambda _: btn.configure(border_width=1, border_color='#8B8C94'), add='+')
+    btn.bind('<FocusOut>', lambda _: btn.configure(border_width=0), add='+')
     return btn
 
 
 def make_entry(parent: tk.Widget, var: tk.StringVar):
-    return tk.Entry(parent, textvariable=var, bg=COLOR_INPUT_BG, fg=COLOR_TEXT_TITLE, insertbackground=COLOR_TEXT_TITLE,
-                    relief="flat", bd=0, highlightthickness=1, highlightbackground=COLOR_BORDER,
-                    highlightcolor=COLOR_PRIMARY, font=(FONT_FAMILY, 10))
+    entry = WorkbenchEntry(parent, textvariable=var, fg_color=COLOR_INPUT_BG,
+                    text_color=COLOR_TEXT_TITLE, border_color=COLOR_BORDER, border_width=1,
+                    height=36, corner_radius=6, font=(FONT_FAMILY, 13))
+    entry.bind('<FocusIn>', lambda _: entry.configure(border_color='#8B8C94'), add='+')
+    entry.bind('<FocusOut>', lambda _: entry.configure(border_color=COLOR_BORDER), add='+')
+    return entry
 
 
 class ToolTip:
@@ -550,33 +577,36 @@ class ProgramTab:
         self._poll()
 
     def _build_ui(self):
-        card = tk.Frame(self.frame, bg=COLOR_CARD_BG, relief="flat", bd=0, padx=16, pady=12)
-        card.pack(fill="both", expand=True, padx=10, pady=10)
+        card = tk.Frame(self.frame, bg=COLOR_CARD_BG, relief="flat", bd=0, padx=24, pady=16)
+        card.pack(fill="both", expand=True)
 
         # Row 1
         row1 = tk.Frame(card, bg=COLOR_CARD_BG);
         row1.pack(fill="x", pady=(0, 10))
+        row1.columnconfigure((0, 1), weight=1, uniform='fields')
         name_wrap = tk.Frame(row1, bg=COLOR_CARD_BG);
-        name_wrap.pack(side="left", fill="both", expand=True, padx=(0, 12))
+        name_wrap.grid(row=0, column=0, sticky='nsew', padx=(0, 6))
         name_head = tk.Frame(name_wrap, bg=COLOR_CARD_BG);
         name_head.pack(fill="x")
         tk.Label(name_head, text="服务名称", bg=COLOR_CARD_BG, fg=COLOR_TEXT_BODY, font=(FONT_FAMILY, 9)).pack(
-            side="left", pady=7)
+            side="left", pady=(0, 8))
         self.name_var = tk.StringVar(value=self.cfg.name)
-        make_entry(name_wrap, self.name_var).pack(fill="x", ipady=7)
+        self.name_entry = make_entry(name_wrap, self.name_var)
+        self.name_entry.pack(fill="x")
 
         arg_wrap = tk.Frame(row1, bg=COLOR_CARD_BG);
-        arg_wrap.pack(side="left", fill="both", expand=True)
+        arg_wrap.grid(row=0, column=1, sticky='nsew', padx=(6, 0))
         arg_head = tk.Frame(arg_wrap, bg=COLOR_CARD_BG);
         arg_head.pack(fill="x")
         tk.Label(arg_head, text="程序参数", bg=COLOR_CARD_BG, fg=COLOR_TEXT_BODY, font=(FONT_FAMILY, 9)).pack(
-            side="left")
+            side="left", pady=(0, 8))
         q = tk.Label(arg_head, text=" (?)", bg=COLOR_CARD_BG, fg=COLOR_PRIMARY, font=(FONT_FAMILY, 9, "bold"),
                      cursor="hand2");
-        q.pack(side="left")
+        q.pack(side="left", pady=(0, 8))
         ToolTip(q, '示例: --port 8080')
         self.args_var = tk.StringVar(value=self.cfg.args)
-        make_entry(arg_wrap, self.args_var).pack(fill="x", ipady=7)
+        self.args_entry = make_entry(arg_wrap, self.args_var)
+        self.args_entry.pack(fill="x")
 
         # Row 2
         row2 = tk.Frame(card, bg=COLOR_CARD_BG);
@@ -588,9 +618,8 @@ class ProgramTab:
         self.type_var = tk.StringVar(value=self.cfg.service_type)
         self.type_box = ttk.Combobox(type_wrap, width=8, state="readonly", values=["exe", "jar"],
                                      textvariable=self.type_var, style="TCombobox")
-        self.type_box.pack(side="left", padx=(8, 0), ipady=2);
+        self.type_box.pack(side="left", padx=(8, 0), ipady=3);
         self.type_box.bind("<<ComboboxSelected>>", lambda _: self._on_type_changed())
-        tk.Label(row2, text="路径", bg=COLOR_CARD_BG, fg=COLOR_TEXT_BODY, font=(FONT_FAMILY, 9)).pack(side="left")
         self.auto_start_var = tk.BooleanVar(value=self.cfg.auto_start_instance)
         tk.Checkbutton(row2, text="自启实例", variable=self.auto_start_var, bg=COLOR_CARD_BG, fg=COLOR_PRIMARY,
                        font=(FONT_FAMILY, 9)).pack(side="right")
@@ -599,8 +628,9 @@ class ProgramTab:
         path_row = tk.Frame(card, bg=COLOR_CARD_BG);
         path_row.pack(fill="x", pady=(0, 10))
         self.path_var = tk.StringVar(value=self.cfg.exe_path)
-        make_entry(path_row, self.path_var).pack(side="left", fill="x", expand=True, ipady=7)
-        make_button(path_row, "浏览", self._browse).pack(side="left", padx=(10, 0))
+        self.path_entry = make_entry(path_row, self.path_var)
+        self.path_entry.pack(side="left", fill="x", expand=True)
+        make_button(path_row, "浏览", self._browse, py=8).pack(side="left", padx=(10, 0))
 
         # Java Rows
         self.java_row = tk.Frame(card, bg=COLOR_CARD_BG);
@@ -608,7 +638,7 @@ class ProgramTab:
         tk.Label(self.java_row, text="Java 命令", bg=COLOR_CARD_BG, fg=COLOR_TEXT_BODY, font=(FONT_FAMILY, 9)).pack(
             side="left")
         self.java_var = tk.StringVar(value=self.cfg.java_path);
-        make_entry(self.java_row, self.java_var).pack(side="left", fill="x", expand=True, ipady=7, padx=(10, 0))
+        make_entry(self.java_row, self.java_var).pack(side="left", fill="x", expand=True, padx=(10, 0))
         self.jvm_row = tk.Frame(card, bg=COLOR_CARD_BG);
         self.jvm_row.pack(fill="x", pady=(0, 14))
         tk.Label(self.jvm_row, text="JVM 参数", bg=COLOR_CARD_BG, fg=COLOR_TEXT_BODY, font=(FONT_FAMILY, 9)).pack(
@@ -620,7 +650,7 @@ class ProgramTab:
         self.btn_jar_template.pack(side="right", padx=(10, 0))
         self.jvm_args_var = tk.StringVar(value=self.cfg.jvm_args);
         self.jvm_entry = make_entry(self.jvm_row, self.jvm_args_var)
-        self.jvm_entry.pack(side="left", fill="x", expand=True, ipady=7, padx=(10, 0))
+        self.jvm_entry.pack(side="left", fill="x", expand=True, padx=(10, 0))
         ToolTip(self.jvm_entry, '-Xms 设置初始堆内存，-Xmx 设置最大堆内存；例如 -Xms256m -Xmx512m')
 
         # Action Buttons
@@ -668,13 +698,6 @@ class ProgramTab:
             bg=COLOR_CARD_BG,
             font=(FONT_FAMILY, 9, "bold")
         ).pack(side="left")
-        tk.Label(
-            log_toolbar,
-            text="Ctrl+F 搜索 | Ctrl+L 清空",
-            fg=COLOR_TEXT_MUTED,
-            bg=COLOR_CARD_BG,
-            font=(FONT_FAMILY, 8)
-        ).pack(side="left", padx=(10, 0))
         make_button(log_toolbar, "搜索", self._show_search, px=10, py=3, font_size=9).pack(side="right", padx=(8, 0))
         make_button(log_toolbar, "导出日志", self.export_logs, px=10, py=3, font_size=9).pack(side="right", padx=(8, 0))
         make_button(log_toolbar, "清空日志", self.clear_logs, danger=True, px=10, py=3, font_size=9).pack(side="right")
@@ -790,7 +813,7 @@ class ProgramTab:
         self._follow_latest = bottom >= 0.999
 
     def show_latest(self):
-        self.log_text.see("end")
+        self.log_text.yview_moveto(1.0)
         self._follow_latest = True
 
     def _flush_log_queue(self):
@@ -1138,6 +1161,7 @@ class App:
             window_geometry=data["window_geometry"],
             startup_delay_sec=data["startup_delay_sec"],
             startup_interval_sec=data["startup_interval_sec"],
+            update_proxy=data['update_proxy'],
         )
 
     def _migrate_legacy_logs(self, tabs: List[dict]) -> int:
@@ -1164,14 +1188,14 @@ class App:
         return migrated
 
     def _build_ui(self):
-        sidebar = tk.Frame(self.root, bg=COLOR_SIDEBAR_BG, width=220, highlightthickness=1,
+        sidebar = tk.Frame(self.root, bg=COLOR_SIDEBAR_BG, width=228, highlightthickness=1,
                            highlightbackground=COLOR_BORDER);
         sidebar.pack(side="left", fill="y");
         sidebar.pack_propagate(False)
-        title_wrap = tk.Frame(sidebar, bg=COLOR_SIDEBAR_BG, padx=16, pady=14)
+        title_wrap = tk.Frame(sidebar, bg=COLOR_SIDEBAR_BG, padx=16, pady=18)
         title_wrap.pack(fill="x")
         tk.Label(title_wrap, text="服务进程", bg=COLOR_SIDEBAR_BG, fg=COLOR_TEXT_TITLE,
-                 font=(FONT_FAMILY, 13, "bold")).pack(side="left")
+                 font=(FONT_FAMILY, 12, "bold")).pack(side="left")
         self.service_count_label = tk.Label(title_wrap, text="0", bg="#F2F3F5", fg=COLOR_TEXT_MUTED,
                                             font=(FONT_FAMILY, 8), padx=7, pady=2)
         self.service_count_label.pack(side="right")
@@ -1198,9 +1222,9 @@ class App:
 
         main = tk.Frame(self.root, bg=COLOR_APP_BG)
         main.pack(side="left", fill="both", expand=True)
-        toolbar = tk.Frame(main, bg="#FFFFFF", padx=14, pady=8, highlightthickness=1,
-                           highlightbackground=COLOR_BORDER)
+        toolbar = tk.Frame(main, bg="#FFFFFF", padx=24, pady=12)
         toolbar.pack(fill="x")
+        tk.Frame(main, bg=COLOR_BORDER, height=1).pack(fill='x')
         self.running_summary_label = tk.Label(toolbar, text="运行 0 / 0", bg="#FFFFFF", fg=COLOR_TEXT_BODY,
                                               font=(FONT_FAMILY, 10, "bold"))
         self.running_summary_label.pack(side="left")
@@ -1243,16 +1267,15 @@ class App:
         for i, t in enumerate(self.tabs):
             active = (i == self.current_idx);
             running = t.process.running
-            bg = "#EDF3FF" if active else COLOR_SIDEBAR_BG
-            row = tk.Frame(self.tab_list_frame, bg=bg, cursor="hand2");
+            bg = "#E9E9EC" if active else COLOR_SIDEBAR_BG
+            row = ctk.CTkFrame(self.tab_list_frame, fg_color=bg, corner_radius=8, height=40, cursor="hand2");
             row.pack(fill="x", pady=2)
-            if active: tk.Frame(row, bg=COLOR_PRIMARY, width=3).pack(side="left", fill="y")
-            dot = tk.Label(row, text="●", bg=bg, fg=COLOR_SUCCESS if running else "#C9CDD4", font=("Arial", 10),
+            dot = tk.Label(row, text="●", bg=bg, fg=COLOR_SUCCESS if running else "#B1B1B9", font=("Arial", 9),
                            padx=9)
-            dot.pack(side="left")
+            dot.pack(side="left", padx=(4, 0), pady=5)
             service_name = t.name_var.get().strip() or "未命名服务"
             lbl = tk.Label(row, text=service_name, bg=bg, fg=COLOR_PRIMARY if active else COLOR_TEXT_TITLE,
-                           font=(FONT_FAMILY, 9), anchor="w", pady=9)
+                           font=(FONT_FAMILY, 9), anchor="w", pady=6)
             lbl.pack(side="left", fill="x", expand=True)
             ToolTip(lbl, service_name)
             if len(self.tabs) > 1:
@@ -1311,10 +1334,11 @@ class App:
         self.schedule_save(immediate=True)
 
     def show_settings(self):
-        win = tk.Toplevel(self.root);
+        win = ctk.CTkToplevel(self.root);
         win.title("系统设置");
-        win.geometry("480x490");
-        win.configure(bg="#FFFFFF");
+        win.geometry(f"520x460+{self.root.winfo_rootx() + max(0, (self.root.winfo_width() - 520) // 2)}+{self.root.winfo_rooty() + 20}");
+        win.minsize(520, 460)
+        win.configure(fg_color="#FFFFFF");
         win.transient(self.root)
         tk.Label(win, text="基本设置", font=(FONT_FAMILY, 12, "bold"), bg="#FFFFFF").pack(pady=(20, 15))
         v_auto = tk.BooleanVar(value=self.config_obj.sys_auto_start)
@@ -1378,6 +1402,18 @@ class App:
             except Exception as exc:
                 messagebox.showerror('自启检查失败', str(exc), parent=win)
         make_button(win, '检查开机启动', check_autostart, px=12, py=6).pack(pady=12)
+        tk.Frame(win, bg=COLOR_BORDER, height=1).pack(fill='x', padx=32, pady=8)
+        tk.Label(win, text='更新代理', bg='#FFFFFF', fg=COLOR_TEXT_BODY,
+                 font=(FONT_FAMILY, 9)).pack(anchor='w', padx=40)
+        proxy_var = tk.StringVar(value=self.config_obj.update_proxy)
+        proxy_entry = make_entry(win, proxy_var)
+        proxy_entry.pack(fill='x', padx=40, pady=(6, 10))
+        ToolTip(proxy_entry, '留空：系统代理；direct：直接连接；或填写 http://主机:端口。必须是现场机器能连接的地址。')
+
+        def save_proxy(*_):
+            self.config_obj.update_proxy = proxy_var.get().strip()
+            self.schedule_save()
+        proxy_var.trace_add('write', save_proxy)
         make_button(win, '检查更新', self.check_update, primary=True, px=12, py=6).pack(pady=6)
 
     def check_update(self):
@@ -1387,13 +1423,15 @@ class App:
             messagebox.showinfo('检查更新', '在线升级仅支持发布版 EXE，源码运行请更新源码。', parent=self.root)
             return
         self._update_busy = True
-        progress = tk.Toplevel(self.root)
+        proxy = self.config_obj.update_proxy
+        progress = ctk.CTkToplevel(self.root)
         progress.title('工作台更新')
-        progress.geometry('420x150')
+        progress.geometry(f'420x180+{self.root.winfo_rootx() + max(0, (self.root.winfo_width() - 420) // 2)}+{self.root.winfo_rooty() + 100}')
+        progress.configure(fg_color='#FFFFFF')
         progress.transient(self.root)
         progress.grab_set()
-        progress.protocol('WM_DELETE_WINDOW', lambda: None)
-        label = tk.Label(progress, text='正在检查 GitHub 最新版本…', padx=20, pady=30)
+        cancelled = threading.Event()
+        label = tk.Label(progress, text='正在检查 GitHub 最新版本…', bg='#FFFFFF', fg=COLOR_TEXT_BODY, padx=20, pady=20)
         label.pack(fill='both', expand=True)
         results = queue.Queue()
 
@@ -1405,8 +1443,18 @@ class App:
 
         def finish():
             self._update_busy = False
+            if progress.winfo_exists():
+                progress.grab_release()
+                progress.destroy()
+
+        def cancel():
+            cancelled.set()
             progress.grab_release()
             progress.destroy()
+            self._set_status('已取消更新，当前版本未替换')
+        progress.protocol('WM_DELETE_WINDOW', cancel)
+        progress.bind('<Escape>', lambda _: cancel())
+        make_button(progress, '取消', cancel, ghost=True, px=18, py=6).pack(pady=(0, 16))
 
         def poll(stage):
             if self._closing:
@@ -1415,6 +1463,9 @@ class App:
                 status, value = results.get_nowait()
             except queue.Empty:
                 self.root.after(100, lambda: poll(stage))
+                return
+            if cancelled.is_set():
+                self._update_busy = False
                 return
             if status == 'error':
                 finish()
@@ -1436,7 +1487,7 @@ class App:
                     finish()
                     return
                 label.config(text='正在下载并校验新版，请稍候…')
-                threading.Thread(target=worker, args=(lambda: download_release(value, resolve_data_dir() / 'updates'),), daemon=True).start()
+                threading.Thread(target=worker, args=(lambda: download_release(value, resolve_data_dir() / 'updates', proxy),), daemon=True).start()
                 self.root.after(100, lambda: poll('download'))
                 return
             try:
@@ -1453,7 +1504,7 @@ class App:
             finish()
             self.root.destroy()
 
-        threading.Thread(target=worker, args=(lambda: latest_release(APP_VERSION),), daemon=True).start()
+        threading.Thread(target=worker, args=(lambda: latest_release(APP_VERSION, proxy),), daemon=True).start()
         self.root.after(100, lambda: poll('check'))
 
     def _set_status(self, text: str, warning: bool = False, error: bool = False):
@@ -1474,6 +1525,7 @@ class App:
             "window_geometry": self.config_obj.window_geometry,
             "startup_delay_sec": self.config_obj.startup_delay_sec,
             "startup_interval_sec": self.config_obj.startup_interval_sec,
+            "update_proxy": self.config_obj.update_proxy,
         }
 
     def schedule_save(self, immediate: bool = False):
@@ -1601,6 +1653,7 @@ class AppConfig:
     window_geometry: str
     startup_delay_sec: int = 5
     startup_interval_sec: int = 2
+    update_proxy: str = ''
 
 
 if __name__ == "__main__":
@@ -1615,7 +1668,7 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Windows 初始化失败: {e}")
 
-    root = tk.Tk()
+    root = ctk.CTk()
     app = App(root)
     root.protocol("WM_DELETE_WINDOW", app.save_and_exit)
     root.mainloop()

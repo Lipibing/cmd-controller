@@ -41,14 +41,20 @@ class AppUiSmokeTests(unittest.TestCase):
         ]
         for item in self.patches:
             item.start()
-        self.root = tk.Tk()
+        self.root = wsm.ctk.CTk()
         self.root.withdraw()
         self.app = wsm.App(self.root)
         self.root.update()
 
     def tearDown(self):
         self.app.dispose(stop_process=False)
+        for timer in self.root.tk.call('after', 'info'):
+            self.root.after_cancel(timer)
         self.root.destroy()
+        if self.root in wsm.ctk.AppearanceModeTracker.app_list:
+            wsm.ctk.AppearanceModeTracker.app_list.remove(self.root)
+        wsm.ctk.AppearanceModeTracker.update_loop_running = False
+        wsm.ctk.ScalingTracker.update_loop_running = False
         for item in reversed(self.patches):
             item.stop()
         self.temp.cleanup()
@@ -252,6 +258,16 @@ class AppUiSmokeTests(unittest.TestCase):
             self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(),
                                  self.root.winfo_rooty() + self.root.winfo_height())
         self.assertEqual(tab.btn_jar_template.master, tab.jvm_row)
+
+    def test_form_fields_share_baselines_and_equal_columns(self):
+        self.root.deiconify()
+        for geometry in ('960x640', '1240x820'):
+            self.root.geometry(geometry)
+            self.root.update()
+            tab = self.app.tabs[0]
+            self.assertEqual(tab.name_entry.winfo_rooty(), tab.args_entry.winfo_rooty())
+            self.assertLessEqual(abs(tab.name_entry.winfo_width() - tab.args_entry.winfo_width()), 1)
+            self.assertEqual(tab.name_entry.winfo_height(), tab.args_entry.winfo_height())
 
 
 if __name__ == "__main__":

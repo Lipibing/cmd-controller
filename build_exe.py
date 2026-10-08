@@ -8,7 +8,7 @@ main_script = "win_service_manager.py"  # <--- 请修改为你的主程序文件
 # 图标文件名
 icon_file = "window.ico"
 # 版本号
-app_version = "v2.9"
+app_version = "v2.10"
 output_name = "服务进程管理工作台"
 
 def build():
@@ -26,6 +26,7 @@ def build():
         f'--add-data={icon_path};.',
         f'--name={output_name}',
         '--clean',              # 打包前清理临时文件
+        '--collect-all=customtkinter',
         f'--distpath={base_dir / "dist"}',
         f'--workpath={base_dir / "build"}',
         f'--specpath={base_dir}',

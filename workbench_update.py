@@ -3,9 +3,11 @@ import hashlib
 import json
 import re
 import subprocess
+import time
+from urllib.error import HTTPError, URLError
 from pathlib import Path
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request, urlopen, build_opener, ProxyHandler
 
 REPOSITORY = 'Lipibing/cmd-controller'
 ASSET_NAME = 'ServiceProcessWorkbench.exe'
@@ -19,12 +21,33 @@ def version_tuple(value):
     return parts + (0,) * (3 - len(parts))
 
 
-def read_url(url, limit):
+def open_request(request, proxy=''):
+    if proxy and proxy != 'direct':
+        parsed = urlparse(proxy)
+        if parsed.scheme not in {'http', 'https'} or not parsed.hostname or parsed.username:
+            raise ValueError('代理地址需为 http://主机:端口 或 https://主机:端口，不支持内嵌账号')
+    opener = urlopen if not proxy else build_opener(ProxyHandler(
+        {} if proxy == 'direct' else {'http': proxy, 'https': proxy})).open
+    for attempt in range(3):
+        try:
+            return opener(request, timeout=40)
+        except HTTPError as exc:
+            if exc.code not in {408, 429, 500, 502, 503, 504} or attempt == 2:
+                raise
+        except (URLError, TimeoutError, OSError) as exc:
+            if attempt == 2:
+                raise RuntimeError('连接 GitHub 失败：网络超时或连接不可用。请检查现场网络、代理和防火墙；'
+                                   '需要访问 api.github.com、github.com 和 release-assets.githubusercontent.com。'
+                                   '可在系统设置填写现场可用的更新代理，或手动下载 EXE 替换。') from exc
+        time.sleep(0.5 * (attempt + 1))
+
+
+def read_url(url, limit, proxy=''):
     parsed = urlparse(url)
     if parsed.scheme != 'https' or parsed.hostname not in {'api.github.com', 'github.com'}:
         raise ValueError('更新地址不受信任')
     request = Request(url, headers={'User-Agent': 'ServiceProcessWorkbench', 'Accept': 'application/vnd.github+json'})
-    with urlopen(request, timeout=30) as response:
+    with open_request(request, proxy) as response:
         data = response.read(limit + 1)
     if len(data) > limit:
         raise ValueError('更新文件超过大小限制')
@@ -47,13 +70,13 @@ def parse_release(data, current):
     return {'version': tag, 'notes': str(data.get('body') or '')[:4000], 'assets': assets}
 
 
-def latest_release(current):
-    data = json.loads(read_url(f'https://api.github.com/repos/{REPOSITORY}/releases/latest', 1024 * 1024))
+def latest_release(current, proxy=''):
+    data = json.loads(read_url(f'https://api.github.com/repos/{REPOSITORY}/releases/latest', 1024 * 1024, proxy))
     return parse_release(data, current)
 
 
-def download_release(release, directory):
-    sums = read_url(release['assets']['SHA256SUMS.txt'], 16384).decode('utf-8')
+def download_release(release, directory, proxy=''):
+    sums = read_url(release['assets']['SHA256SUMS.txt'], 16384, proxy).decode('utf-8')
     expected = None
     for line in sums.splitlines():
         fields = line.split()
@@ -68,7 +91,7 @@ def download_release(release, directory):
     digest = hashlib.sha256()
     request = Request(release['assets'][ASSET_NAME], headers={'User-Agent': 'ServiceProcessWorkbench'})
     try:
-        with urlopen(request, timeout=30) as response, temporary.open('wb') as output:
+        with open_request(request, proxy) as response, temporary.open('wb') as output:
             total = 0
             while True:
                 chunk = response.read(1024 * 1024)

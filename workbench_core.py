@@ -32,6 +32,7 @@ APP_DEFAULTS = {
     "window_geometry": "1240x820+120+80",
     "startup_delay_sec": 5,
     "startup_interval_sec": 2,
+    "update_proxy": "",
 }
 
 
