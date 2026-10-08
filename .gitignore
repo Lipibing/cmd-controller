@@ -1,0 +1,24 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# IDE and test cache
+.idea/
+.pytest_cache/
+
+# PyInstaller output
+build/
+dist/
+*.spec
+
+# Runtime data and local machine configuration
+logs/
+manager_config.json
+manager_config.backup.json
+profiles.json
+runtime_state.json
+
+# Temporary files
+*.tmp
+*.log
+.package-smoke-*/
