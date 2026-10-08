@@ -168,6 +168,17 @@ class WorkbenchEntry(ctk.CTkEntry):
     config = ctk.CTkEntry.configure
 
 
+class WorkbenchBadge(ctk.CTkLabel):
+    def config(self, **kwargs):
+        if 'bg' in kwargs:
+            kwargs['fg_color'] = kwargs.pop('bg')
+        if 'fg' in kwargs:
+            kwargs['text_color'] = kwargs.pop('fg')
+        changed = {key: value for key, value in kwargs.items() if self.cget(key) != value}
+        if changed:
+            self.configure(**changed)
+
+
 ctk.set_appearance_mode('light')
 ctk.set_widget_scaling(1.0)
 
@@ -616,10 +627,12 @@ class ProgramTab:
         tk.Label(type_wrap, text="运行类型", bg=COLOR_CARD_BG, fg=COLOR_TEXT_BODY, font=(FONT_FAMILY, 9)).pack(
             side="left")
         self.type_var = tk.StringVar(value=self.cfg.service_type)
-        self.type_box = ttk.Combobox(type_wrap, width=8, state="readonly", values=["exe", "jar"],
-                                     textvariable=self.type_var, style="TCombobox")
-        self.type_box.pack(side="left", padx=(8, 0), ipady=3);
-        self.type_box.bind("<<ComboboxSelected>>", lambda _: self._on_type_changed())
+        self.type_box = ctk.CTkComboBox(type_wrap, width=90, height=30, state='readonly', values=['exe', 'jar'],
+                                      variable=self.type_var, command=lambda _: self._on_type_changed(),
+                                      fg_color='#FFFFFF', text_color=COLOR_TEXT_TITLE, border_color=COLOR_BORDER,
+                                      button_color=COLOR_BTN_SECONDARY, button_hover_color=COLOR_BTN_SECONDARY_HOVER,
+                                      border_width=1, corner_radius=6, font=(FONT_FAMILY, 13))
+        self.type_box.pack(side="left", padx=(8, 0));
         self.auto_start_var = tk.BooleanVar(value=self.cfg.auto_start_instance)
         tk.Checkbutton(row2, text="自启实例", variable=self.auto_start_var, bg=COLOR_CARD_BG, fg=COLOR_PRIMARY,
                        font=(FONT_FAMILY, 9)).pack(side="right")
@@ -657,8 +670,8 @@ class ProgramTab:
         action_row = tk.Frame(card, bg=COLOR_CARD_BG);
         self.action_row = action_row
         action_row.pack(fill="x", pady=(0, 10))
-        self.status_tag = tk.Label(action_row, text="● 已停止", fg=COLOR_STOP, bg=COLOR_STOP_BG,
-                                   font=(FONT_FAMILY, 9, "bold"), width=10, pady=8)
+        self.status_tag = WorkbenchBadge(action_row, text="● 已停止", text_color=COLOR_STOP, fg_color=COLOR_STOP_BG,
+                                        font=(FONT_FAMILY, 12), width=104, height=36, corner_radius=6)
         self.status_tag.pack(side="left", padx=(0, 12))
         self.btn_start = make_button(action_row, "启动服务", self.request_start, primary=True);
         self.btn_start.pack(side="left", padx=(0, 8))

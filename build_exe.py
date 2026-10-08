@@ -27,6 +27,7 @@ def build():
         f'--name={output_name}',
         '--clean',              # 打包前清理临时文件
         '--collect-all=customtkinter',
+        '--exclude-module=numpy',
         f'--distpath={base_dir / "dist"}',
         f'--workpath={base_dir / "build"}',
         f'--specpath={base_dir}',
