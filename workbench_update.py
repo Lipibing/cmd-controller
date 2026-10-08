@@ -101,11 +101,13 @@ def launch_replacement(target, source, pid, environment):
         "$ErrorActionPreference = 'Stop'\n"
         f"$target = {ps_quote(target)}\n$source = {ps_quote(source)}\n"
         "$backup = $target + '.previous'\n$staged = $target + '.update'\n"
+        "$backedUp = $false\n"
         f"Wait-Process -Id {int(pid)} -Timeout 120 -ErrorAction SilentlyContinue\n"
         f"if (Get-Process -Id {int(pid)} -ErrorAction SilentlyContinue) {{ exit 1 }}\n"
         "try {\n"
         " Copy-Item -LiteralPath $source -Destination $staged -Force\n"
         " Copy-Item -LiteralPath $target -Destination $backup -Force\n"
+        " $backedUp = $true\n"
         " for ($attempt = 0; ; $attempt++) {\n"
         "  try { Move-Item -LiteralPath $staged -Destination $target -Force; break }\n"
         "  catch { if ($attempt -ge 29) { throw }; Start-Sleep -Seconds 1 }\n"
@@ -113,10 +115,10 @@ def launch_replacement(target, source, pid, environment):
         " Start-Process -FilePath $target -WorkingDirectory (Split-Path $target)\n"
         "} catch {\n"
         " $_ | Out-File -LiteralPath ($source + '.error.txt')\n"
-        " if (Test-Path -LiteralPath $backup) {\n"
+        " if ($backedUp -and (Test-Path -LiteralPath $backup)) {\n"
         "  Copy-Item -LiteralPath $backup -Destination $target -Force\n"
         "  Start-Process -FilePath $target -WorkingDirectory (Split-Path $target)\n"
-        " }\n"
+        " } else { Start-Process -FilePath $target -WorkingDirectory (Split-Path $target) }\n"
         "} finally { Remove-Item -LiteralPath $staged -Force -ErrorAction SilentlyContinue }\n",
         encoding='utf-8-sig')
     return subprocess.Popen(
